@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Question } from '@/types/quiz';
 import { mockQuestions, getChapters } from '@/data/mockQuestions';
-import { Plus, Trash2, Edit, Eye, Save, X } from 'lucide-react';
+import { FirebaseService } from '@/services/firebaseService';
+import { Plus, Trash2, Edit, Eye, Save, X, Database, Loader2, Upload } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const QuestionManager = () => {
-  const [questions, setQuestions] = useState<Question[]>(mockQuestions);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newQuestion, setNewQuestion] = useState({
@@ -19,33 +22,81 @@ export const QuestionManager = () => {
     options: ['', '', '', ''],
     answer: ''
   });
+  const [chapters, setChapters] = useState<number[]>([]);
+  const [isFirebaseMode, setIsFirebaseMode] = useState(false);
 
-  const chapters = getChapters();
+  // Load questions from Firebase or local
+  useEffect(() => {
+    const loadQuestions = async () => {
+      try {
+        setLoading(true);
+        // Try to load from Firebase first
+        const firebaseQuestions = await FirebaseService.getAllQuestions();
+        if (firebaseQuestions.length > 0) {
+          setQuestions(firebaseQuestions);
+          setIsFirebaseMode(true);
+          toast.success('Loaded questions from Firebase');
+        } else {
+          // Fallback to local questions
+          setQuestions(mockQuestions);
+          setIsFirebaseMode(false);
+          toast.info('No Firebase data found, using local questions');
+        }
+        
+        const availableChapters = [...new Set(firebaseQuestions.length > 0 ? firebaseQuestions.map(q => q.chapter) : mockQuestions.map(q => q.chapter))];
+        setChapters(availableChapters.sort((a, b) => a - b));
+      } catch (error) {
+        console.error('Error loading questions:', error);
+        setQuestions(mockQuestions);
+        setChapters(getChapters());
+        setIsFirebaseMode(false);
+        toast.error('Failed to load from Firebase, using local questions');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const handleAddQuestion = () => {
+    loadQuestions();
+  }, []);
+
+  const handleAddQuestion = async () => {
     if (!newQuestion.question || !newQuestion.answer || newQuestion.options.some(opt => !opt)) {
-      alert('Please fill in all fields');
+      toast.error('Please fill in all fields');
       return;
     }
 
-    const question: Question = {
-      id: `q${Date.now()}`,
-      chapter: newQuestion.chapter,
-      question: newQuestion.question,
-      options: newQuestion.options,
-      answer: newQuestion.answer
-    };
-
-    setQuestions([...questions, question]);
-    
-    // Reset form
-    setNewQuestion({
-      chapter: 1,
-      question: '',
-      options: ['', '', '', ''],
-      answer: ''
-    });
-    setShowAddForm(false);
+    try {
+      if (isFirebaseMode) {
+        // Add to Firebase
+        const newId = await FirebaseService.addQuestion(newQuestion);
+        const question: Question = {
+          id: newId,
+          ...newQuestion
+        };
+        setQuestions([...questions, question]);
+        toast.success('Question added to Firebase');
+      } else {
+        // Add to local state
+        const question: Question = {
+          id: `q${Date.now()}`,
+          ...newQuestion
+        };
+        setQuestions([...questions, question]);
+        toast.success('Question added locally');
+      }
+      
+      // Reset form
+      setNewQuestion({
+        chapter: 1,
+        question: '',
+        options: ['', '', '', ''],
+        answer: ''
+      });
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Error adding question:', error);
+      toast.error('Failed to add question');
+    }
   };
 
   const handleEditQuestion = (id: string) => {
@@ -62,28 +113,56 @@ export const QuestionManager = () => {
     }
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingId) return;
 
-    setQuestions(questions.map(q => 
-      q.id === editingId 
-        ? { ...q, ...newQuestion }
-        : q
-    ));
+    try {
+      if (isFirebaseMode) {
+        // Update in Firebase
+        await FirebaseService.updateQuestion(editingId, newQuestion);
+        toast.success('Question updated in Firebase');
+      } else {
+        // Update local state
+        setQuestions(questions.map(q => 
+          q.id === editingId 
+            ? { ...q, ...newQuestion }
+            : q
+        ));
+        toast.success('Question updated locally');
+      }
 
-    setEditingId(null);
-    setShowAddForm(false);
-    setNewQuestion({
-      chapter: 1,
-      question: '',
-      options: ['', '', '', ''],
-      answer: ''
-    });
+      setEditingId(null);
+      setShowAddForm(false);
+      setNewQuestion({
+        chapter: 1,
+        question: '',
+        options: ['', '', '', ''],
+        answer: ''
+      });
+    } catch (error) {
+      console.error('Error updating question:', error);
+      toast.error('Failed to update question');
+    }
   };
 
-  const handleDeleteQuestion = (id: string) => {
-    if (confirm('Are you sure you want to delete this question?')) {
-      setQuestions(questions.filter(q => q.id !== id));
+  const handleDeleteQuestion = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this question?')) {
+      return;
+    }
+
+    try {
+      if (isFirebaseMode) {
+        // Delete from Firebase
+        await FirebaseService.deleteQuestion(id);
+        toast.success('Question deleted from Firebase');
+      } else {
+        // Delete from local state
+        setQuestions(questions.filter(q => q.id !== id));
+        toast.success('Question deleted locally');
+      }
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      toast.error('Failed to delete question');
     }
   };
 
@@ -98,9 +177,35 @@ export const QuestionManager = () => {
     });
   };
 
+  const handleSyncToFirebase = async () => {
+    try {
+      await FirebaseService.syncLocalQuestionsToFirebase(questions);
+      setIsFirebaseMode(true);
+      toast.success('Questions synced to Firebase successfully!');
+    } catch (error) {
+      console.error('Error syncing to Firebase:', error);
+      toast.error('Failed to sync to Firebase');
+    }
+  };
+
   const getQuestionsByChapter = (chapter: number) => {
     return questions.filter(q => q.chapter === chapter);
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center p-8">
+            <div className="flex items-center space-x-2">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              <span className="text-muted-foreground">Loading questions...</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -109,18 +214,42 @@ export const QuestionManager = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Question Manager</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  Question Manager
+                  {isFirebaseMode ? (
+                    <span className="flex items-center gap-1 text-sm text-green-600 bg-green-100 px-2 py-1 rounded">
+                      <Database className="h-3 w-3" />
+                      Firebase
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                      Local
+                    </span>
+                  )}
+                </CardTitle>
                 <CardDescription>
                   Manage your quiz questions. Total: {questions.length} questions
                 </CardDescription>
               </div>
-              <Button 
-                onClick={() => setShowAddForm(true)}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add New Question
-              </Button>
+              <div className="flex gap-2">
+                {!isFirebaseMode && (
+                  <Button 
+                    onClick={handleSyncToFirebase}
+                    variant="outline"
+                    className="flex items-center gap-2"
+                  >
+                    <Upload className="h-4 w-4" />
+                    Sync to Firebase
+                  </Button>
+                )}
+                <Button 
+                  onClick={() => setShowAddForm(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add New Question
+                </Button>
+              </div>
             </div>
           </CardHeader>
         </Card>

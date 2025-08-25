@@ -8,7 +8,8 @@ import {
   writeBatch,
   doc,
   deleteDoc,
-  updateDoc
+  updateDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { Question } from '@/types/quiz';
@@ -16,7 +17,25 @@ import { Question } from '@/types/quiz';
 const QUESTIONS_COLLECTION = 'questions';
 
 export class FirebaseService {
-  // Get all questions
+  // Get all questions with real-time updates
+  static subscribeToQuestions(callback: (questions: Question[]) => void) {
+    return onSnapshot(collection(db, QUESTIONS_COLLECTION), (snapshot) => {
+      const questions: Question[] = [];
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        questions.push({
+          id: doc.id,
+          chapter: data.chapter,
+          question: data.question,
+          options: data.options,
+          answer: data.answer
+        });
+      });
+      callback(questions.sort((a, b) => a.chapter - b.chapter));
+    });
+  }
+
+  // Get all questions (one-time fetch)
   static async getAllQuestions(): Promise<Question[]> {
     try {
       const querySnapshot = await getDocs(collection(db, QUESTIONS_COLLECTION));
@@ -98,6 +117,28 @@ export class FirebaseService {
     }
   }
 
+  // Update a question
+  static async updateQuestion(id: string, question: Partial<Question>): Promise<void> {
+    try {
+      const docRef = doc(db, QUESTIONS_COLLECTION, id);
+      await updateDoc(docRef, question);
+    } catch (error) {
+      console.error('Error updating question:', error);
+      throw error;
+    }
+  }
+
+  // Delete a question
+  static async deleteQuestion(id: string): Promise<void> {
+    try {
+      const docRef = doc(db, QUESTIONS_COLLECTION, id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      throw error;
+    }
+  }
+
   // Bulk upload questions
   static async bulkUploadQuestions(questions: Omit<Question, 'id'>[]): Promise<void> {
     try {
@@ -121,28 +162,6 @@ export class FirebaseService {
     }
   }
 
-  // Update a question
-  static async updateQuestion(id: string, question: Partial<Question>): Promise<void> {
-    try {
-      const docRef = doc(db, QUESTIONS_COLLECTION, id);
-      await updateDoc(docRef, question);
-    } catch (error) {
-      console.error('Error updating question:', error);
-      throw error;
-    }
-  }
-
-  // Delete a question
-  static async deleteQuestion(id: string): Promise<void> {
-    try {
-      const docRef = doc(db, QUESTIONS_COLLECTION, id);
-      await deleteDoc(docRef);
-    } catch (error) {
-      console.error('Error deleting question:', error);
-      throw error;
-    }
-  }
-
   // Clear all questions (use with caution)
   static async clearAllQuestions(): Promise<void> {
     try {
@@ -158,6 +177,23 @@ export class FirebaseService {
       console.log(`Successfully deleted ${questions.length} questions`);
     } catch (error) {
       console.error('Error clearing questions:', error);
+      throw error;
+    }
+  }
+
+  // Sync local questions to Firebase
+  static async syncLocalQuestionsToFirebase(localQuestions: Question[]): Promise<void> {
+    try {
+      // First clear existing questions
+      await this.clearAllQuestions();
+      
+      // Then upload local questions
+      const questionsToUpload = localQuestions.map(({ id, ...question }) => question);
+      await this.bulkUploadQuestions(questionsToUpload);
+      
+      console.log('Successfully synced local questions to Firebase');
+    } catch (error) {
+      console.error('Error syncing questions to Firebase:', error);
       throw error;
     }
   }
