@@ -1,6 +1,6 @@
 export interface Question {
   id: string;
-  chapter: number;
+  chapter: string;
   question: string;
   options: string[];
   answer: string;

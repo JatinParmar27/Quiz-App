@@ -1,5 +1,5 @@
 import { Question } from '@/types/quiz';
-import { allNewQuestions } from './newQuestions';
+
 
 // Combine original questions with new questions
 export const mockQuestions: Question[] = [
@@ -9,15 +9,15 @@ export const mockQuestions: Question[] = [
 
 
   // Add all new questions from chapters 5-8
-  ...allNewQuestions
+
 ];
 
-export const getChapters = (): number[] => {
+export const getChapters = (): string[] => {
   const chapters = [...new Set(mockQuestions.map(q => q.chapter))];
-  return chapters.sort((a, b) => a - b);
+  return chapters.sort();
 };
 
-export const getQuestionsByChapters = (selectedChapters: number[]): Question[] => {
+export const getQuestionsByChapters = (selectedChapters: string[]): Question[] => {
   return mockQuestions.filter(q => selectedChapters.includes(q.chapter));
 };
 

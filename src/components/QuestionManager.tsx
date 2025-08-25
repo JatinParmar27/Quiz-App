@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 import { Question } from '@/types/quiz';
 import { mockQuestions, getChapters } from '@/data/mockQuestions';
 import { FirebaseService } from '@/services/firebaseService';
@@ -17,12 +17,12 @@ export const QuestionManager = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [newQuestion, setNewQuestion] = useState({
-    chapter: 1,
+    chapter: '1',
     question: '',
     options: ['', '', '', ''],
     answer: ''
   });
-  const [chapters, setChapters] = useState<number[]>([]);
+  const [chapters, setChapters] = useState<string[]>([]);
   const [isFirebaseMode, setIsFirebaseMode] = useState(false);
 
   // Load questions from Firebase or local
@@ -44,11 +44,11 @@ export const QuestionManager = () => {
         }
         
         const availableChapters = [...new Set(firebaseQuestions.length > 0 ? firebaseQuestions.map(q => q.chapter) : mockQuestions.map(q => q.chapter))];
-        setChapters(availableChapters.sort((a, b) => a - b));
+        setChapters(availableChapters.sort());
       } catch (error) {
         console.error('Error loading questions:', error);
         setQuestions(mockQuestions);
-        setChapters(getChapters());
+        setChapters(getChapters().map(c => c.toString()));
         setIsFirebaseMode(false);
         toast.error('Failed to load from Firebase, using local questions');
       } finally {
@@ -87,7 +87,7 @@ export const QuestionManager = () => {
       
       // Reset form
       setNewQuestion({
-        chapter: 1,
+        chapter: '1',
         question: '',
         options: ['', '', '', ''],
         answer: ''
@@ -134,7 +134,7 @@ export const QuestionManager = () => {
       setEditingId(null);
       setShowAddForm(false);
       setNewQuestion({
-        chapter: 1,
+        chapter: '1',
         question: '',
         options: ['', '', '', ''],
         answer: ''
@@ -170,7 +170,7 @@ export const QuestionManager = () => {
     setShowAddForm(false);
     setEditingId(null);
     setNewQuestion({
-      chapter: 1,
+      chapter: '1',
       question: '',
       options: ['', '', '', ''],
       answer: ''
@@ -188,7 +188,7 @@ export const QuestionManager = () => {
     }
   };
 
-  const getQuestionsByChapter = (chapter: number) => {
+  const getQuestionsByChapter = (chapter: string) => {
     return questions.filter(q => q.chapter === chapter);
   };
 
@@ -266,21 +266,13 @@ export const QuestionManager = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="chapter">Chapter</Label>
-                  <Select 
-                    value={newQuestion.chapter.toString()} 
-                    onValueChange={(value) => setNewQuestion(prev => ({ ...prev, chapter: parseInt(value) }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {chapters.map(chapter => (
-                        <SelectItem key={chapter} value={chapter.toString()}>
-                          Chapter {chapter}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    id="chapter"
+                    type="text"
+                    value={newQuestion.chapter}
+                    onChange={(e) => setNewQuestion(prev => ({ ...prev, chapter: e.target.value }))}
+                    placeholder="Enter chapter name or number"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="answer">Correct Answer</Label>
