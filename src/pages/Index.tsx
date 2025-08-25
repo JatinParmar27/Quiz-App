@@ -1,7 +1,13 @@
 import { Quiz } from '@/components/Quiz';
+import { AdminLink } from '@/components/AdminLink';
 
 const Index = () => {
-  return <Quiz />;
+  return (
+    <>
+      <AdminLink />
+      <Quiz />
+    </>
+  );
 };
 
 export default Index;
