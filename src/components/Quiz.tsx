@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Question, QuizState, QuizAttempt } from '@/types/quiz';
-import { getQuestionsByChapters, shuffleArray } from '@/data/mockQuestions';
+import { shuffleArray } from '@/data/firebaseQuestions';
+import { FirebaseService } from '@/services/firebaseService';
 import { ChapterSelection } from './quiz/ChapterSelection';
 import { QuestionCard } from './quiz/QuestionCard';
 import { QuizResults } from './quiz/QuizResults';
@@ -24,21 +25,26 @@ export const Quiz = () => {
     quizState.startTime !== null && !quizState.isCompleted
   );
 
-  const startQuiz = (selectedChapters: number[]) => {
-    const questionsForChapters = getQuestionsByChapters(selectedChapters);
-    const shuffledQuestions = shuffleArray(questionsForChapters);
-    
-    setQuestions(shuffledQuestions);
-    setQuizState({
-      selectedChapters,
-      currentQuestionIndex: 0,
-      answers: [],
-      startTime: new Date(),
-      endTime: null,
-      isCompleted: false,
-      showReview: false
-    });
-    resetTimer();
+  const startQuiz = async (selectedChapters: number[]) => {
+    try {
+      const questionsForChapters = await FirebaseService.getQuestionsByChapters(selectedChapters);
+      const shuffledQuestions = shuffleArray(questionsForChapters);
+      
+      setQuestions(shuffledQuestions);
+      setQuizState({
+        selectedChapters,
+        currentQuestionIndex: 0,
+        answers: [],
+        startTime: new Date(),
+        endTime: null,
+        isCompleted: false,
+        showReview: false
+      });
+      resetTimer();
+    } catch (error) {
+      console.error('Error starting quiz:', error);
+      // You might want to show an error message to the user here
+    }
   };
 
   const handleAnswer = (selectedAnswer: string) => {
